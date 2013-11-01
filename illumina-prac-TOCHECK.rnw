@@ -1,0 +1,914 @@
+%\VignetteIndexEntry{BeadArrayUseCases Vignette}
+%\VignetteDepends{}
+%\VignetteKeywords{Illumina Microarray Expression}
+%\VignettePackage{BeadArrayUseCases}
+
+\documentclass[a4paper,11pt]{article}
+
+\textwidth=6.2in
+\textheight=8.5in
+\oddsidemargin=.1in
+\evensidemargin=.1in
+\headheight=-.3in
+\parindent=0pt
+
+
+\usepackage{amsthm,ragged2e,marvosym,wasysym}
+\usepackage{mls40Sweave}
+\usepackage[utf8]{inputenc}
+\usepackage{sidecap}
+
+\newcommand{\Rfunction}[1]{{\texttt{#1}}}
+\newcommand{\Robject}[1]{{\texttt{#1}}}
+\newcommand{\Rpackage}[1]{{\textsf{#1}}}
+\newcommand{\Rmethod}[1]{{\texttt{#1}}}
+\newcommand{\Rfunarg}[1]{{\texttt{#1}}}
+\newcommand{\Rclass}[1]{{\textit{#1}}}
+
+\SweaveOpts{eval=TRUE, keep.source=FALSE, results=hide}
+
+\title{BeadArray expression analysis using Bioconductor}
+
+
+\author{Mark Dunning}
+
+
+\renewcommand\labelenumi{\textbf{Exercise \theenumi}}
+
+
+% Sweave("IlluminaPLoSVignette.rnw")
+\newtheoremstyle{labexc}%
+{9pt}{12pt}%      space above and below
+{\sffamily\RaggedRight}%              body style
+{0pt}%       heading indent amount
+{\sffamily\bfseries}{:}% heading font and punctuation after it
+{ }%         space after heading is a new line
+{}%          head spec (empty = same as 'plain' style)
+
+\newtheoremstyle{myplain}%
+{9pt}{9pt}%      space above and below
+{\RaggedRight}%              body style
+{0pt}%       heading indent amount
+{\sffamily\bfseries}{}% heading font and punctuation after it
+{ }%         space after heading is a new line
+{}%          head spec (empty = same as 'plain' style)
+
+\newtheoremstyle{mywarning}%
+{9pt}{9pt}%      space above and below
+{\itshape\RaggedRight}%              body style
+{0pt}%       heading indent amount
+{\sffamily\bfseries}{}% heading font and punctuation after it
+{ }%         space after heading is a new line
+{}%          head spec (empty = same as 'plain' style)
+
+\theoremstyle{myplain} \newtheorem*{textinfo}{\large\Info}
+\theoremstyle{labexc} \newtheorem*{exc}{Use Case}
+\theoremstyle{mywarning} \newtheorem*{notebell}{\Large\bell}
+\theoremstyle{myplain} \newtheorem*{noteright}{\Large\Pointinghand}
+\theoremstyle{myplain} \newtheorem*{textstop}{\Large\Stopsign}
+\theoremstyle{myplain} \newtheorem*{commentary}{\Large\CheckedBox}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+
+\maketitle
+
+<<setWidth, eval=TRUE, echo=FALSE>>=
+options(width=70);
+@
+
+\section*{Processing Illumina BeadChips}
+
+This practical is an abridged version of the vignette found in the \Rpackage{BeadArrayUseCases} package, which you should already have installed. In this practical you will go through the main steps in the workflow of analysiing Illumina data from various sources. 
+
+
+\section*{Experimental data}
+
+
+The example dataset consists of bead-level data from a series of Human HT-12 version 3 BeadChips hybridized at the Cancer Research UK, Cambridge Research Institute Genomics Core facility.  `Bead-level' refers to the availability of intensity and location information for each bead on each BeadArray in an experiment.  In this dataset, BeadArrays were hybridized with either Universal Human Reference RNA (UHRR, Stratagene) or Brain Reference RNA (Ambion) as used in the MAQC project \cite{MAQC:NatBiotech:2006}. Bead-level data for all 12 arrays are included in the \Rpackage{BeadArrayUseCases} package. These data are in the compressed {\tt .bab} format \cite{SmithLynch:CancerInform:2010}, which can be analysed using the \Rpackage{beadarray} package.\\
+We also use data from the \Rpackage{beadarrayExampleData} package to avoid running some time-consuming operations in the practical.
+
+
+\section{Analysis of bead-level data using \Rpackage{beadarray}}
+
+\subsection*{Quality assessment using scanner metrics}
+
+The first view of array quality can be assessed using the metrics calculated by the scanner.  These include the 95th (P95) and 5th (P05) quantiles of all pixel intensities on the image. A signal-to-noise ratio (SNR) can be calculated as the ratio of these two quantities. These metrics can be viewed in real-time as the arrays themselves are being scanned. By tracking these metrics over time, one can potentially halt problematic experiments before they even reach the analysis stage. 
+
+\begin{exc} Plot the P95:P05 signal-to-noise ratio for the HT-12 arrays in this experiment and assess whether any samples appear to be outliers that may need to be removed or down-weighted in further analyses.
+\end{exc}
+
+
+<<plotmetrics>>=
+ht12metrics <- read.table(system.file("extdata/Chips/Metrics.txt",package = "BeadArrayUseCases"),sep="\t",header=TRUE,as.is=TRUE)
+
+ht12metrics
+
+ht12snr <- ht12metrics$P95Grn/ht12metrics$P05Grn
+labs <- paste(ht12metrics[,2], ht12metrics[,3], sep="_")
+
+
+par(mai=c(1.5, 0.8,0.3,0.1))
+plot(1:12, ht12snr, pch=19,ylab="P95 / P05",
+        xlab="", main="Signal-to-noise ratio for HT12 data",
+        axes=FALSE, frame.plot=TRUE)
+axis(2)
+axis(1, 1:12, labs, las=2)
+@
+The above code uses standard {\tt R} functions to obtain the P95 and P05 values from the metrics file stored in the package. The \Rfunction{system.file} function is a \Rpackage{base} function that will locate the directory where the \Rpackage{BeadarrayUseCases} package is installed. The plotting commands are just a suggestion of how the data could be presented and could be adapted to individual circumstances.
+
+\begin{noteright}
+Scanner metrics information is equally as useful for sample quality assessment of summarized data.  
+\end{noteright}
+
+\begin{noteright}
+The P95 and P05 values will fluctuate over time and are dependant upon the scanner setup. Including SNR values for arrays other than those currently being analysed will give a better indication of whether any outlier arrays exist. 
+\end{noteright}
+
+
+
+\subsection*{Data import and storage}
+
+The first step in our analysis is to read the data into {\tt R} using the \Rfunction{readIllumina} function. The bead-level data you will need for this example are available in the {\tt extdata/Chips} directory of the \Rpackage{BeadArrayUseCases} package. These files were produced using the \Rpackage{BeadDataPackR} package in Bioconductor which provides a more compact representation of bead-level data. Each BeadChip to be analysed should be found in a sub-directory of the current working directory, with the directory name being the same as the chip name. A sample sheet is used to specify what samples are hybridised to each array and the corresponding sample group.
+
+\begin{exc}
+Read the example bead-level dataset supplied with the \Rpackage{BeadArrayUseCases} package into R. 
+\end{exc}
+
+
+<<Import>>=
+library(beadarray)
+
+chipPath <- system.file("extdata/Chips", package = "BeadArrayUseCases")
+list.files(chipPath)
+sampleSheetFile <- paste(chipPath, "/sampleSheet.csv",sep="")
+readLines(sampleSheetFile)
+data <- readIllumina(dir=chipPath, sampleSheet = sampleSheetFile, useImages=FALSE, illuminaAnnotation="Humanv3")
+
+@
+
+Usually the directory will be in a known location, but for convenience we use the \Rfunction{system.file} function to find the directory where \Rpackage{BeadArrayUseCases} is installed.
+
+The final line executes the reading of the data. The \texttt{extdata/Chips} directory is used as a base directory, and each chip to be read is found in a separate sub-directory. As defined by the sample sheet, we are only reading one section from each chip
+
+By setting \Rfunarg{useImages} to \texttt{FALSE}, we use the intensity values stored in the text files, rather than recomputing them from the images.  The argument \Rfunarg{illuminaAnnotation} is a character string to identify the organism and annotation revision number of the chip being analysed, but not the number of samples on the chip. Hence the value \texttt{Humanv3} can be used for both Human WG-6 and HumanHT12 v3 data. Setting this value correctly will allow \Rpackage{beadarray} to identify what bead types are to be used for control purposes and convert the numeric ArrayAddressIDs to a more commonly-used format. If you are unsure of the correct annotation to use, this argument can be left blank at this stage. 
+
+\begin{noteright}
+If the data to be imported are not in {\tt .bab} format, specifying the same arguments to  \Rfunction{readIllumina} will search for files of type {\tt .txt} instead. 
+\end{noteright}
+
+
+\subsection*{Selecting or checking the annotation for a dataset}
+
+If you are unsure of the correct annotation to use and thus left the \Rfunarg{illuminaAnnotation} argument to \Rfunction{readIllumina} as the default, \Rfunction{suggestAnnotation} can be employed to identify the platform, based on the ArrayAddressIDs that are present in the data.  The \Rfunction{setAnnotation} function can then be used to assign this annotation to the dataset.
+
+
+\begin{exc}
+Verify the version number of the dataset that has been read in and set the annotation of the bead-level data object accordingly.
+\end{exc}
+
+
+<<annotation>>=
+suggestAnnotation(data,verbose=TRUE)
+
+annotation(data) <- "Humanv3"
+@
+
+
+\begin{noteright}
+The result of \Rfunction{suggestAnnotation} only gives guidance about which annotation to use. Hence, the results may be unpredictable on custom arrays, or arrays that are not listed in the \Rfunction{suggestAnnotation} output.
+\end{noteright}
+
+\subsubsection*{The \Rclass{beadLevelData} class}
+
+Once imported, bead-level data are stored in an object of class \Rclass{beadLevelData}.
+This class can handle raw data from both single-channel and two-color BeadArray platforms.
+
+<<BLData>>=
+slotNames(data)
+@
+
+\noindent The command above gives us an overview of the structure of the \Rclass{beadLevelData} class, which is composed of several slots.  The  \texttt{experimentData}, \texttt{sectionData} and \texttt{beadData} slots can be viewed as a hierarchy, with each containing data at a different level.
+Each can be accessed using the \Rfunction{@} operator, although we will see an easier way of accessing the data shortly.\\
+
+\noindent The \Robject{experimentData} slot holds information that is consistent across the entire dataset.  Quantities with one value per array-section are stored in the \Robject{sectionData} slot.  For instance, any metrics information read by \Rfunction{readIllumina}, along with section names and the total number of beads, will be stored there. This is also a convenient place to store any QC information derived during the preprocessing of the data.  The data extracted from the individual text files are stored in the \Robject{beadData} slot.
+
+
+\subsubsection*{Accessing data in a \Rclass{beadLevelData} object}
+
+
+\begin{exc}
+Output the data stored in the \Robject{sectionData} slot, and determine the section names and number of bead intensities available from each section.  Access the intensities, x-coordinates and probe IDs for the first 5 beads on the first array section.
+\end{exc}
+
+<<BLData2>>=
+data@sectionData
+sectionNames(data)
+numBeads(data)
+
+
+head(data[[1]])
+
+
+getBeadData(data, array=1, what = "Grn")[1:5]
+getBeadData(data, array=1, what = "GrnX")[1:5]
+getBeadData(data, array=1, what = "ProbeID")[1:5]
+@
+
+\noindent Using the \Rfunction{@} operator to access the data in particular slots is not particularly convenient or intuitive.  The functions \Rfunction{sectionNames}, \Rfunction{numBeads} and \Rfunction{getBeadData}
+provide more convenient interfaces to the \Rclass{beadLevelData} object to retrieve specific
+information.
+
+\noindent The first line above uses the \Rfunction{@} operator to access all the data in the \Robject{sectionData} slot, which can be quite large and unwieldy.  The commands below it (lines 2-3) are accessor functions for retrieving a specific subset of data from the same slot.\\
+
+\noindent Line 4 shows that if a \Rclass{beadLevelData} object is accessed in the same fashion as a list, a data frame containing the bead-level data for the specified array is returned.  To access a specific entry in this data frame, we can use a further subset, or the data can be accessed using the \Rfunction{getBeadData} function.  In addition to the \Rclass{beadLevelData} object, you need to specify the section (\texttt{array=...}) of interest and the column heading you want.
+
+
+\subsubsection*{Extracting transformed data}
+
+In this example, the data stored in the \Rclass{beadLevelData} object by \Rfunction{readIllumina} are extracted directly from the Illumina text files. The values in the \texttt{Grn} column are intensity values inferred from a known location in the scanned image and there are a number of steps involved before these can be translated into quantities that relate to the expression levels.  The scanner generally produces values in the range $0$ to $2^{16} - 1$, although the image  manipulation and background subtraction steps can lead to values outside this range. This is not a convenient scale for visualization and analysis and it is common to convert intensities onto the approximate range $0$ to $16$ using a $\log_2$ transformation (possibly after an additional step to adjust non-positive intensities).\\
+
+
+Although this is simple to do in isolation using \texttt{R}'s built in functions, it becomes more complicated within a function, leading to a large number of arguments being required in order to specify whether the function should process the green or red channel, use foreground or background intensities, convert to the $\log_2$ scale etc.  Even in this situation the user is restricted to the options that are provided by the arguments.\\
+
+
+A more flexible way to obtain transformed per-bead data from a \Rclass{beadLevelData} object is to define a transformation function that takes as arguments the \Rclass{beadLevelData} object and an array index.  The function then manipulates the data in the desired manner and returns a vector the same length as the number of beads on the array.  Many of the plotting and quality assessment functions within \Rpackage{beadarray} take such a function as one of their arguments.  By using such a system, \Rpackage{beadarray} provides a great deal of flexibility over exactly how the data is analysed.  
+
+
+\begin{exc}
+Extract the green intensities on the $\log_2$ scale for the first 10 probes from the first array section.
+\end{exc}
+
+
+<<transformFunctions>>=
+log2(data[[1]][1:10,"Grn"])
+log2(getBeadData(data, array = 1, what = "Grn")[1:10])
+logGreenChannelTransform(data, array = 1)[1:10]
+@
+
+
+The above example shows three different ways of obtaining the log green channel intensity data.  Lines 1 and 2 use {\tt R}'s \Rfunction{log2} function on data extracted using the methods we've already seen.  The third entry uses one of \Rpackage{beadarray}'s built in transformation functions.  To view an example of how a transformation function is defined you can enter the name of one of \Rpackage{beadarray}'s pre-defined functions without any parentheses or arguments.
+
+
+<<transformFunctions2, results=verbatim>>=
+logGreenChannelTransform
+@
+
+
+
+\begin{noteright}
+In addition to the \Rfunction{logGreenChannelTransform} function shown above, \Rpackage{beadarray} provides predefined functions for extracting the green intensities on the unlogged scale \newline(\Rfunction{greenChannelTransform}), analogous functions for two-channel data \newline(\Rfunction{logRedChannelTransform}, \Rfunction{redChannelTransform}), and functions for computing the log-ratio between channels (\Rfunction{logRatioTransform}).
+\end{noteright}
+
+
+\begin{noteright}
+\textbf{If you are interested in some of advance image processing features of beadarray, please see the \Rpackage{BeadArrayUseCases} vignette at a later date.}
+\end{noteright}
+
+\subsection*{Quality assessment for raw and bead-level data}
+
+\subsubsection*{Boxplots of intensity values}
+
+Boxplots are routinely used to assess the dynamic range of each sample and look for unusual signal distributions.
+
+\begin{exc}
+Create boxplots of the green channel intensities for all arrays. Do you notice any arrays with unusual distributions?
+\end{exc}
+
+
+<<Boxplots>>=
+boxplot(data, transFun = logGreenChannelTransform, col = "green", ylab=expression(log[2](intensity)), las = 2, outline = FALSE, main = "HT-12 MAQC data")
+@
+
+
+The \Rfunction{boxplot} function is a standard function in R that we has been extended to work for the \Rclass{beadLevelData} class.  Consequently, the standard parameters to \Rfunction{boxplot}, such as changing the title of the plot, scale and axis labels are possible, some of which are shown in the final five arguments above.  The help page for the \Rfunction{par} function provides information on these and other arguments that can be supplied to \Rfunction{boxplot}. The only \Rpackage{beadarray} specific argument is the second, \Rfunarg{transFun}, which takes a transformation function of the format shown previously.  In this case we have selected to use the $\log_2$ of the green channel, which is also the default.\\
+
+
+\subsubsection*{Plotting control probes}
+
+
+Illumina have designed a number of control probes for each BeadArray platform. Two particular controls on expression arrays are housekeeping and biotin controls, which are expected to be highly expressed in any sample. With the \Rfunction{poscontPlot} function, we can plot the intensities of any ArrayAddressIDs that are annotated as belonging to the Housekeeping or Biotin control groups.
+
+\begin{exc}
+Generate plots of the housekeeping and biotin controls for the 6th, 7th, 8th and 12th arrays from this dataset.
+\end{exc}
+
+
+<<controlEx>>=
+
+par(mfrow=c(2,2))
+
+
+for(i in c(6,7,8,12)) {
+poscontPlot(data ,array = i, main=paste(sectionNames(data)[i], "Positive Controls"), ylim = c(4,15) )
+}
+@
+
+Provided the annotation of the \Rclass{beadLevelData} object has been correctly set, the \Rfunction{poscontPlot} function should be able to identify the revelant probes and intensities. This code generates positive controls plots for four arrays in the dataset; one good quality array and three that we have noted problems with. A different view of the control probes is now provided by the \Rfunction{combinedControlPlot} function in \Rpackage{beadarray}, which allows better comparison of control types.
+
+
+\begin{exc}
+Make combined control plots for the same arrays as above
+\end{exc}
+
+<<combinedPlot>>=
+
+combinedControlPlot(data ,array = 6)
+combinedControlPlot(data ,array = 7)
+combinedControlPlot(data ,array = 8)
+combinedControlPlot(data ,array = 12)
+
+@
+
+\subsubsection*{Visualizing intensities across an array surface}
+
+The combination of both an intensity and a location for each bead on the array allows us to visualize how the intensities change across the array surface.  This kind of visualization is not possible when using the summarized output, as the summary values are averaged over spatial positions. The \Rfunction{imageplot} function can be used to create false color representations of the array surface.
+
+
+\begin{exc}
+Produce imageplots for the same set of arrays and look for any evidence of spatial artefacts.
+\end{exc}
+
+% need a full-screen graphic window to make this effective
+<<imageplots>>=
+
+   imageplot(data, array=6, high="darkgreen", low="lightgreen", zlim=c(4,10))
+   imageplot(data, array=7, high="darkgreen", low="lightgreen", zlim=c(4,10))
+   imageplot(data, array=8, high="darkgreen", low="lightgreen", zlim=c(4,10))
+   imageplot(data, array=12, high="darkgreen", low="lightgreen", zlim=c(4,10))
+
+@
+
+
+\subsubsection*{Plotting the location of outliers}
+
+
+Recall that the BeadArray technology includes many replicates (typically $\sim$ 20
+of each probe type in each sample on an HT-12 array).
+BeadStudio/GenomeStudio removes outliers greater than 3 median absolute deviations (MADs)
+from the median prior to calculating summary values.
+
+
+\begin{exc}
+Plot the location of outliers on the arrays with the most obvious spatial artefacts and plot their location.
+\end{exc}
+
+
+<<outliers>>=
+par(mfrow=c(2,1))
+for(i in c(8,12)){
+   outlierplot(data, array=i, main=paste(sectionNames(data)[i], "outliers"))
+}
+@
+
+By default, the \Rfunction{outlierplot} function uses Illumina's `three MADs from the median' rule, but applied to log-transformed data. It then plots the identified outliers by their location on the surface of the array section. Of course, the user can specify alternative rules and transformations and the function is additionally able to accept arguments to \Rfunction{plot} such as \Rfunarg{main}.
+
+
+\subsubsection*{Excluding beads affected by spatial artefacts} 
+
+
+\noindent It should be apparent that some arrays in this dataset have significant artefacts and, although it appears that most beads in these regions are classed as outliers, it would be desirable to mask all beads from these areas from further analysis. Our preferred method for doing this is to use BASH \cite{Cairnsetal:Bioinf:2008}, which takes local spatial information into account when determining outliers, and uses replicates within an array to calculate residuals.\\
+
+
+\noindent BASH performs three types of artefact detection in the style of the affymetrix-oriented  Harshlight \cite{MSFetal:BMCBio:2005} package: {\it Compact analysis} identifies large clusters of outliers, where each outlying bead must be an immediate neighbour of another outlier;  {\it Diffuse analysis} finds regions that contain more outliers than would be anticipated by chance, and {\it Extended analysis} looks for chip-wide variation, such as a consistent gradient effect.\\
+
+
+\noindent The output of BASH is a list containing a variety of data, including a list of weights indicating the beads that BASH has identified as problematic.  These weights may be saved to the \Rclass{beadLevelData} object for future reference by using the \Rfunction{setWeights} function. The locations of the masked beads can be visualized using the \Rfunction{showArrayMask} function.\\
+
+\begin{notebell}
+The following commands can be used to run BASH on array 8 in the dataset. However, due to time-constraints we suggest that you do not run these in the practical.
+
+<<BASHexample, eval=FALSE>>=
+BASHoutput <- BASH(data, array=8)
+
+data <- setWeights(data, wts = BASHoutput$wts, array=8)
+
+@
+
+\end{notebell}
+
+
+\textbf{Two arrays in this dataset have already been analysed by BASH and can be found in the \Rpackage{beadarrayExampleData} package}
+
+
+\begin{exc}
+Load the \Rpackage{beadarrayExampleData} package, which contains the BASH output from two arrays in this dataset. Find out how many beads have been masked for removal and visualise their locations.
+\end{exc}
+
+
+<<OneIMadeEarlier>>=
+library(beadarrayExampleData)
+data(exampleBLData)
+sectionNames(exampleBLData)
+
+head(exampleBLData[[1]])
+
+table(getBeadData(exampleBLData, what="wts", array=1))
+table(getBeadData(exampleBLData, what="wts", array=2))
+
+par(mfrow=c(1,2))
+for(i in c(1,2)) {
+  showArrayMask(exampleBLData, array = i, override = TRUE)
+}
+
+
+@
+
+You should see that after having run BASH and \Rfunction{setArrayWeights}, a \texttt{wts} column appears in the object. We call \Rfunarg{showArrayMask}, which creates a plot similar to \Rfunarg{outlierplot} mentioned earlier.  In addition to displaying the beads classed as outliers, \Rfunarg{showArrayMask} shows in red the beads that are currently masked from further analysis.  By default the function refuses to create the plot if over 200,000 beads have been masked, as this can cause considerable slowdown on older computers, so the \Rfunarg{override} argument has been used in this example to force the plot creation. 
+
+
+
+
+\subsubsection*{Producing control tables}
+
+With knowledge of what ArrayAddressIDs match different control types, we can easily provide summaries of these control types on each array. In \Rfunction{quickSummary} the mean and standard deviation of all control types is calculated for a specified array, using intensities of all beads that correspond to the different control types. Note that these summaries may not correspond to similar quantities reported in Illumina's BeadStudio/GenomeStudio software, as the summaries are produced after removing outliers. The \Rfunction{makeQCTable} function extends this functionality to produce a table of summaries for all sections in the \Rclass{beadLevelData} object. These data can be stored in the \Robject{sectionData} slot for future reference. It is also informative to compare the expression level of various control types to the background level of the array.  This is done by the \Rfunction{controlProbeDetection} function that returns the percentage of each control type that are significantly expressed above background level.  For positive controls we would prefer this to be near 100\% on a good quality array.
+
+\begin{exc}
+Summarize the control intensities for the first array, then tabulate the mean and standard deviation of all control probes on every array.
+\end{exc}
+
+
+<<qcTables>>=
+quickSummary(data, array=1)
+
+
+qcReport <- makeQCTable(data)
+
+
+head(qcReport)[,1:5]
+@
+
+The above code generates a quality control summary for a single array (Line 1), then for all arrays in the \Rclass{beadLevelData} object using the \Rfunction{makeQCTable} function. 
+
+
+\subsubsection*{Saving control tables to a bead-level object}
+The \Rfunction{insertSectionData} function allows the user to modify the \Robject{sectionData} slot of a \newline\Robject{beadLevelData} object. We can use this functionality to store any quality control (QC) values that we have computed.
+
+
+\begin{exc}
+Store the computed QC values into the bead-level data object.
+\end{exc}
+
+<<storeQCTables>>=
+data <- insertSectionData(data, what="BeadLevelQC", data=qcReport)
+names(data@sectionData)
+@
+
+The \Rfunction{insertSectionData} function requires a data frame with the same number of rows as the number of sections in the \Rclass{beadLevelData} object. The \Rfunarg{what} parameter is used to assign a name to the data in the \Robject{sectionData} slot.
+
+\begin{noteright}
+You could also save the QC table to disk using the \Rfunction{write.csv} function (or similar).
+\end{noteright}
+
+
+
+\subsection*{Summarizing the data}
+
+
+The summarization procedure takes the \Rclass{beadLevelData} object, where each probe
+is replicated a varying number of times on each array, and produces a summarized object which is more amenable for making comparisons between arrays and sample groups.  For each array section represented in the \Rclass{beadLevelData} object, all observations are extracted, transformed, and then grouped together according to their ArrayAddressID. Outliers are removed and the mean and standard deviation of the remaining beads are calculated.\\
+
+
+There are many possible choices for the extraction, transformation and choice of summary statistics and \Rpackage{beadarray} allows users to experiment with different options via the definition of an \Rclass{illuminaChannel} class. For expression data, the green intensities will be the quantities to be summarised. However, the \Rclass{illuminaChannel} class is designed to cope with two-channel data where the green or red (or some combination of the two) may be required with minimal changes to the code. The \Rfunction{summarize} function is used to produce summary-level data and has the default setting of performing a $\log_2$ transformation. With the appropriate changes it is also possible to summarize on the un-logged scale, as if the data had been processed by GenomeStudio.
+
+\begin{exc}
+Generate summary-level data for this dataset on the $\log_2$ and unlogged scale.
+\end{exc}
+
+
+<<createBeadSummaryData>>=
+
+datasumm <- summarize(BLData =data)
+
+grnchannel.unlogged <- new("illuminaChannel", transFun = greenChannelTransform, outlierFun = illuminaOutlierMethod, exprFun = function(x) mean(x,na.rm=TRUE),  varFun= function(x) sd(x, na.rm=TRUE),channelName= "G")
+
+datasumm.unlogged <- summarize(BLData = data, 
+useSampleFac=FALSE, channelList = list(grnchannel.unlogged))
+@
+
+Line 1 uses the default settings of \Rfunction{summarize} to produce summary-level data. Line 2 shows the full gory details of how to modify how the bead-level data are summarized by the creation of an \Rclass{illuminaChannel} object. We use a transformation function that just returns the Grn intensities, Illumina’s default outlier function and modified mean and standard deviation functions that remove {\tt NA} values. This new channel definiton is then passed to \Rfunction{summarize}. In this call we also explicitly set the \Rfunarg{useSampleFac} argument to {\tt FALSE}. The \Rfunarg{useSampleFac} parameter should be used in cases where multiple sections for the same biological sample are to be combined, which is not applicable in this case. 
+
+\begin{noteright}
+During the summarization process, the numeric ArrayAddressIDs used in the \Rclass{beadLevelData} object are converted to the more commonly-used Illumina IDs.  However, control probes retain their original ArrayAddressIDs and any IDs that cannot be
+converted (e.g. internal controls used by Illumina for which no annotation exists) are removed unless \newline {\tt removeUnMappedProbes = TRUE} is specified.
+\end{noteright}
+
+
+\subsubsection*{The \Rclass{ExpressionSetIllumina} class}
+
+
+Summarized data are stored in an object of type \Rclass{ExpressionSetIllumina} which
+is an extension of the \Rclass{ExpressionSet} class developed by the Bioconductor team as a container for data from high-throughput assays.\\
+
+
+Objects of this type use a series of slots to store the data.  For consistency with the definition of other \Rclass{ExpressionSet} objects, we refer to the expression values as the \Robject{exprs} matrix (this stores the probe-specific average intensities) which can be accessed using \Rfunction{exprs} and subset in the usual manner.
+The \Robject{se.exprs} matrix, which stores the probe-specific variability can be accessed using \Rfunction{se.exprs}, and phenotypic data for the experiment can be accessed using \Rfunction{pData}.
+To accommodate the unique features of Illumina data we have added an {\tt nObservations}
+slot, which gives the number of beads that we used to create the summary values for each probe on each array after outlier removal.  The detection score, or detection $p$-value is a standard measure for Illumina expression experiments, and can be viewed as an empirical estimate of the $p$-value for the null hypothesis that a particular probe in not expressed.
+These can be calculated for summarized data provided that the identity of the
+negative controls on the array is known using the function \Rfunction{calculateDetection}.
+
+\begin{exc}
+ Produce boxplots of the summarized data and calculate detection scores. How many probes are present in the summarized data?
+\end{exc}
+
+<<ExpressionSetIllumina>>=
+dim(datasumm)
+
+
+exprs(datasumm)[1:10,1:2]
+se.exprs(datasumm)[1:10, 1:2]
+
+
+par(mai=c(1.5,1,0.2,0.1), mfrow=c(1,2))
+boxplot(exprs(datasumm), ylab=expression(log[2](intensity)), las=2, outline=FALSE)
+boxplot(nObservations(datasumm),  ylab="number of beads", las=2, outline=FALSE)
+
+
+det <- calculateDetection(datasumm)
+
+head(det)
+
+Detection(datasumm) <- det
+@
+
+\begin{noteright}
+\Rfunction{calculateDetection} assumes that the information about the negative controls is found in a particular part of the \Rclass{ExpressionSetIllumina} object, and takes the form of a vector of characters indicating whether each probe in the data is a control or not. This vector can be supplied as the \Rfunarg{status} argument along with an identifier for the negative controls \newline(\Rfunarg{negativeLabel}).
+\end{noteright}
+
+\subsection*{feature and pheno data}
+
+The \Rfunction{fData} and \Rfunction{pData} functions are useful shortcuts to find more information about the features (rows) and samples (columns) in the summary object. These annotations are created automatically whenever a bead-level data is summarized or read from a BeadStudio file. The \Rfunction{fData} will be added to later, but initially contains information on whether each probe is a control or not. In this example the \Robject{phenoData} denotes the sample group for each array; either Brain or UHRR (Universal Human Reference RNA).
+
+\begin{exc}
+Find out how many control probes were present on the array and what arrays belong to the Brain and UHRR groups.
+\end{exc}
+
+<<annotations>>=
+
+head(fData(datasumm))
+table(fData(datasumm)[,"Status"])
+
+pData(datasumm)
+
+@
+
+
+
+\subsection*{Subsetting the data}
+
+
+As we have seen, the expression matrix of the \Robject{ExpressionSetIllumina} object can be subset by column or row, In fact, the same subset operations can be performed on the \Robject{ExpressionSetIllumina} object itself. In the following code, notice how the number of samples and features changes in the output.
+
+
+\begin{exc}
+Create a new summary object for just the UHRR arrays.
+\end{exc}
+
+<<subsetting2>>=
+
+
+uhrrData <- datasumm[,1:6]
+uhrrData
+pData(uhrrData)
+
+@
+
+The object can also be subset by a vector of characters which must correspond to the names of features (i.e. row names). Currently, no analogous functions is available to subset by sample.
+
+\begin{exc}
+Subset the summary data by row; take a subset of the first 1000 rows, and then by 1000 randomly chosen Illumina IDs
+\end{exc}
+
+
+<<subsetting4>>=
+
+datasumm[1:1000,]
+
+randIDs <- sample(featureNames(datasumm), 1000)
+
+datasumm[randIDs,]
+
+@
+
+\section*{Exploratory analysis using boxplots}
+
+
+Boxplots of intensity levels and the number of beads are useful for quality assessment purposes. We have already seen how to create boxplots of the expression and nObservations matrices using standard R graphics. However, \Rpackage{beadarray} includes a modified version of the \Rfunction{boxplot} function that can take any valid \Rclass{ExpressionSetIllumina} object and plot the expression matrix by default using the \Rpackage{ggplot2} system. This allows sample and probe information to be incorporated easily into the plots. For these examples we plot just a subset of the original \Robject{datasumm} object using random row IDs.
+
+\begin{exc}
+Use beadarray's modified boxplot function to plot the expression values for each sample.
+\end{exc}
+
+<<boxplot1>>=
+
+boxplot(datasumm)
+
+@
+
+The function can also plot other \Robject{assayData} items, such as the number of observations.
+
+\begin{exc}
+Now, use beadarray's modified boxplot function to plot the number of observations for each sample.
+\end{exc}
+
+
+<<boxplot2>>=
+
+boxplot(datasumm, what="nObservations")
+
+@
+
+The default boxplot plots a separate box for each array, but often it is beneficial for compare expression levels between different sample groups. With standard R graphics, this might involve subsetting up the plot window according and having to subset the dataset appropriately. However, with the beadarray \Rfunction{boxplot} information stored in the \Rclass{phenoData} slot it can be incorporated into the plot. If the \Rfunarg{sampleFactor} argument to \Rfunction{boxplot} is set to a column found in the phenoData
+
+\begin{exc}
+Compare the overall expression level between UHRR and Brain samples on a boxplot
+\end{exc}
+
+<<boxplot4, fig=TRUE, echo=TRUE,width=8, height=4>>=
+
+boxplot(datasumm, sampleFactor="Sample_Group")
+
+@
+
+In a similar manner, we may wish to visualize the differences between sample groups for particular probe groups. As a simple example, we might want to look at the difference between negative controls and regular probes for each array. Information about control types is stored in the \texttt{Status} column of the \texttt{fData} output
+
+\begin{exc}
+Plot the intensity difference between negative and regular probes for all arrays. To simplify the plot you can use the 1000 genes subset we created earlier. Then, plot the difference between control types between UHRR and Brain samples.
+\end{exc}
+
+<<boxplot5, fig=TRUE, echo=TRUE,width=8, height=4>>=
+
+boxplot(datasumm[randIDs,], probeFactor = "Status")
+boxplot(datasumm, probeFactor = "Status", sampleFactor="Sample_Group")
+
+
+@
+
+\begin{noteright}
+These boxplots have been generated using the \Rpackage{ggplot2} package, and cannot be modified in the same way as traditional R graphics. For instance, you may be familiar with using the \Rfunarg{main} or \Rfunarg{ylim} arguments to change the title or range of a plot. Instead, \Rpackage{ggplot} uses carefully selected default settings to creates a basic plot, and allows other options to be added (using the '+' function) to the plot afterwards. The ggplot2 website, {\tt http://had.co.nz/ggplot2/}, contans excellent documentation about how to customise plots and the code below demonstrates several options that are possible.
+
+
+<<boxplot6, fig=TRUE, echo=TRUE,width=8, height=4>>=
+
+boxplot(datasumm[randIDs,], probeFactor = "Status")  + labs(title="My fancy title", x="Sample Type", y="Normalized Intensity",colour="legend title")+ ylim(5,9)+ scale_fill_manual(name="My fancy legend", values=c("slateblue3", "violetred4"),labels=c("Type1", "Type2")) + coord_flip() +theme(plot.background=theme_rect("khaki"), panel.background=theme_rect("peachpuff"))
+
+@
+
+\end{noteright}
+
+
+\subsection*{Preprocessing, quality assessment and filtering}
+
+
+The controls available on the Illumina platform can be used in the analysis
+to improve inference. As we have already seen in section 1, positive controls can be used to identify suspect arrays.
+Negative control probes, which measure background signal on each array, can be used to
+assess the proportion of expressed probes that are present in a given sample \cite{Shietal:NAR:2010a}.  The \Rfunction{propexpr} function estimates the proportion of expressed probes by comparing the empirical intensity distribution of the negative control probes with that of the regular probes. A mixture model is fitted to the data from each array to infer the intensity distribution of expressed probes and estimate the expressed proportion.
+
+
+\begin{exc}
+Estimate the proportion of probes which are expressed above the level of the
+negative controls on the MAQC samples using the \Rfunction{propexpr} function.  
+Do you notice a difference between the expressed proportions in the UHRR and
+Brain Reference RNA samples?
+\end{exc}
+
+
+<<proportionexpressed>>=
+library(limma)
+
+proportion <- propexpr(exprs(datasumm),status=fData(datasumm)$Status)
+proportion
+t.test(proportion[1:6], proportion[7:12])
+@
+
+
+\begin{noteright}
+Systematic differences exist between different BeadChip versions, so these proportions should only be compared within a given platform type \cite{Shietal:NAR:2010a}.  This estimator has a variety of applications.  It can be used to distinguish heterogeneous or mixed cell samples from pure samples and to provide a measure of transcriptome size.
+\end{noteright}
+
+
+\subsection*{Checking for batch effects}
+ 
+Multidimensional scaling (MDS), assesses sample similarity based on pair-wise distances between samples.  This dimension reduction technique uses the top 500 most variable genes between each pair of samples to calculate a matrix of Euclidean distances which are used to generate a 2 dimensional plot.  Ideally, samples should separate based on biological variables (RNA source, sex, treatment, etc.),  but often technical effects (such as samples processed together on the same BeadChip) may dominate.  Principal component analysis (PCA) is another dimension reduction technique frequently applied to microarray data.
+
+\begin{exc}
+Generate a multidimensional scaling (MDS) plot of the data using the \Rfunction{plotMDS} function.  Assess whether the samples cluster together by sample group.
+\end{exc}
+
+<<qualplots>>=
+plotMDS(exprs(datasumm), col=c(rep("red", 6), rep("blue", 6)), labels=pData(datasumm)$Sample_Name)
+@
+
+If there are no clear batch effects in the data, you will still need to normalise to make the arrays comparable. The most popular way of doing this is the quantile normalisation that you will be familiar with from other microarray technologies.
+
+
+\begin{exc}
+Remove any poor quality arrays from the dataset, and apply quantile normalisation to the remaining arrays. 
+\end{exc}
+
+<<normexp>>=
+normData <- normaliseIllumina(datasumm[,c(1:6,9:12)])
+dim(normData)
+boxplot(normData)
+@
+
+
+
+If you have imported data from GenomeStudio, you might want to consider an alternative approach to normalisation, as described in the BeadArrayUseCases vignette, that makes use of the negative controls on the array. The normal-exponential convolution model has proven useful in background correction of both Affymetrix \cite{Irizarry:Biostat:2003} and two-color data \cite{Ritchieetal:Bioinf:2007}. Having a well-behaved set of negative controls simplifies the parameter estimation process for
+background parameters in this model. Applying this approach to Illumina gene expression data has been shown to offer improved results in terms of bias-variance trade-off and reduced false positives \cite{Shietal:NAR:2010b}. The \Rfunction{neqc} function \cite{Shietal:NAR:2010b} in \Rpackage{limma} fits such a convolution model to the intensities from each sample, before quantile normalizing and $\log_2$ transforming the data to standardize the signal between samples.
+
+\begin{exc}
+Normalise the unlogged summarized data using the neqc method
+\end{exc}
+
+<<neqc>>=
+normData.neqc <- normaliseIllumina(datasumm.unlogged[,c(1:6,9:12)], method="neqc")
+boxplot(normData.neqc)
+dim(normData.neqc)
+table(fData(normData.neqc)[,"Status"])
+
+@
+
+
+\subsubsection*{Filtering based on probe annotation}
+
+Filtering non-responding probes from further analysis can improve the power to detect differential expression. One way of achieving this is to remove probes whose probe sequence has undesirable properties.
+The \Rpackage{illuminaHumanv3.db} annotation package provides access to the reannotation information provided by Barbosa-Morais {\it et al.} \cite{Nunoetal:NAR:2010}. In this paper, a scoring system was defined to quantify the reliability of each probe based on its 50 base sequence. These mappings are based on the probe sequence and not the RefSeq ID, as for the standard annotation packages and can give extra criteria for interpreting the results. For instance, probes with multiple genomic matches, or matches to non-transcribed genomic locations are likely to be unreliable.  This information can be used as a basis for filtering promiscuous or un-informative probes from further analysis, as shown above.
+
+The \Rpackage{illuminaHumanv3.db} package is an example of a Bioconductor annotation package built using infrastructure within the \Rpackage{AnnotationDBi} package. More detailed descriptions of how to access data within annotation packages (and how it is stored) is given with the \Rpackage{AnnotationDbi} package. Essentially, each annotation package comprises a database of mappings between a defined set of microarray identifiers and genomic properties of interest. However, the user of such packages does not need to know the details of the database scheme as convenient wrapper functions are provided. 
+
+
+\begin{exc}
+Add annotation data from the Human v3 annotation package and verify that probes annotated as `Bad' or `No match' generally have lower signal. Exclude such probes from further analysis. 
+\end{exc}
+
+
+<<filteringByAnnotation>>=
+
+ids <- as.character(featureNames(normData))
+
+qual <- unlist(mget(ids, illuminaHumanv3PROBEQUALITY, ifnotfound=NA))
+
+qual <- gsub("*", "", qual, fixed=TRUE)
+
+table(qual)
+
+fData(normData) <- cbind(fData(normData), qual)
+
+boxplot(normData, probeFactor = "qual", sampleFactor="Sample_Group")
+
+rem <- qual == "No match" | qual == "Bad"
+
+normData.filt <- normData[which(!rem),]
+
+dim(normData)
+dim(normData.filt)
+@
+
+Here, the \Rfunction{featureNames} function is a shortcut to find out the probe IDs. The qualities returned by \Rfunction{illuminaHumanv3PROBEQUALITY} contain some entries with a \texttt{*} appended. These refer to special cases, such as mismatches between the transcriptome and genome, or lack or coding annotation and we will ignore these for now.
+
+\begin{noteright}
+The functions used to annotate Illumina BeadArrays have a very simple convention which is {\tt illumina} followed by an organism name, annotation version number, and the mapping you want to use. Hence, the above code could be executed for a Humanv4 array by simply replacing {\tt v3} with {\tt v4}.
+
+\begin{verbatim}
+library(illuminaHumanv4.db)
+
+illuminaHumanv4()
+###...
+qual <- unlist(mget(ids, illuminaHumanv4PROBEQUALITY, ifnotfound=NA))
+
+##etc....
+\end{verbatim}
+
+\end{noteright}
+
+It is possible to find a few outliers in the `Bad' category that have consistently high expression. Some strategies for probe filtering would retain these probes in the analysis, so it is worth considering whether they are of value to an analysis. 
+
+\begin{exc}
+Investigate any IDs that have high expression despite being classed as 'Bad'. 
+\end{exc}
+
+<<badProbes>>=
+
+AveSignal <- rowMeans(exprs(normData))
+
+queryIDs <- names(which(qual == "Bad" & AveSignal > 13.5))
+
+unlist(mget(queryIDs, illuminaHumanv3REPEATMASK))
+
+unlist(mget(queryIDs, illuminaHumanv3SECONDMATCHES))[1:5]
+
+
+@
+
+\begin{noteright}
+If you know how to, you could manually BLAT particular sequences (e.g. using UCSC genome browser) and check their mappings for yourself
+\end{noteright}
+
+\begin{exc}
+(OPTIONAL) Retrieve probe sequences for some dubious probes and manually BLAT them against the genome using the UCSC genome browser
+\end{exc}
+
+<<getSeqence>>=
+mget("ILMN_1692145", illuminaHumanv3PROBESEQUENCE)
+@
+
+
+\subsection*{Differential expression analysis}
+
+
+The differential expression methods available in the \Rpackage{limma} package can be
+used to identify differentially expressed genes.
+The functions \Rfunction{lmFit}, \Rfunction{contrasts.fit} \Rfunction{eBayes} can be applied to the normalized and filtered data.
+
+
+\begin{exc}
+Fit a linear model to summarize the values from replicate arrays and compare UHRR with Brain Reference by setting up a contrast between these samples.  
+Assess array quality using empirical array weights and incorporate these in the final linear model.
+Is there strong evidence of differential expression between these samples?
+\end{exc}
+
+
+<<deanalysis>>=
+rna <- pData(normData)$Sample_Group
+design <- model.matrix(~0+as.factor(rna))
+colnames(design) <- levels(rna)
+aw <- arrayWeights(exprs(normData.filt), design)
+aw
+fit <- lmFit(exprs(normData.filt), design, weights=aw)
+contrasts <- makeContrasts(UHRR-Brain, levels=design)
+contr.fit <- eBayes(contrasts.fit(fit, contrasts))
+topTable(contr.fit, coef=1)
+
+
+par(mfrow=c(1,2))
+volcanoplot(contr.fit, main="UHRR - Brain")
+smoothScatter(contr.fit$Amean, contr.fit$coef,
+                 xlab="average intensity", ylab="log-ratio")
+abline(h=0, col=2, lty=2)
+@
+
+
+The code above shows how to set up a design matrix for this experiment to combine the data from the UHRR and Brain Reference replicates to give one value per condition. Empirical array quality weights \cite{Ritchieetal:BMCBioinf:2006} can be used to measure the relative reliability of each array.  A variance is estimated for each array by the \Rfunction{arrayWeights} function which measures how well the expression values from each array follow the linear model.
+These variances are converted to relative weights which can then be used in the linear model to
+down-weight observations from less reliable arrays which improves power to detect differential
+expression.
+
+We then define a contrast comparing UHRR to Brain Reference and calculate moderated $t$-statistics with empirical Bayes' shrinkage of the sample variances.
+
+For more information about the \Rfunction{lmFit}, \Rfunction{contrasts.fit} and \Rfunction{eBayes} functions, refer to the \Rpackage{limma} documentation.
+
+
+\subsubsection*{Annotating the results of a differential expression analysis}
+
+The \Rfunction{topTable} function displays the results of the empirical Bayes analysis alongside the IDs  assigned by Illumina to each probe in the linear model fit. Obviously this will not provide sufficient information to infer biological meaning from the results. Within Bioconductor, annotation packages are available for each of the major Illumina expression array platforms that map the probe sequences designed by Illumina to functional information useful for downstream analysis. As before, the \Rpackage{illuminaHumanv3.db} package can be used for the arrays in this example dataset. The \Rfunction{addFeatureData} function provides a convenient way to add some commonly used annotations to an existing object.
+
+
+\begin{exc}
+Retrieve annotation information for the normalised data and add this information to the limma results. Write the results of the limma analysis out to disk.
+\end{exc}
+
+
+<<annotation>>=
+normData.filt <- addFeatureData(normData.filt)
+
+head(fData(normData.filt))
+
+anno <- fData(normData.filt)
+
+contr.fit$genes <- anno
+topTable(contr.fit)
+write.fit(contr.fit, file = "maqcresults.txt")
+@
+
+
+
+\subsection*{Wrap-up}
+
+
+
+
+
+The version of {\tt R} and the packages used to complete this tutorial are listed below.
+If you have further questions about using any of the Bioconductor packages used in
+this tutorial, please email the Bioconductor mailing list ({\tt bioconductor@stat.math.ethz.ch}).
+
+
+<<sessionInfo, eval=TRUE, results=verbatim>>=
+sessionInfo()
+@
+
+
+\section*{Acknowledgements}
+We thank James Hadfield and Michelle Osbourne for generating the HT-12 data used in the first section and the attendees of the various courses we have conducted on this topic for their feedback, which has helped improve this document.
+
+
+\bibliographystyle{unsrt}
+\bibliography{plos}
+
+
+\end{document}
