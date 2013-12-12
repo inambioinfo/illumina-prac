@@ -186,12 +186,12 @@ The result of \Rfunction{suggestAnnotation} only gives guidance about which anno
 Once imported, bead-level data are stored in an object of class \Rclass{beadLevelData}.
 This class can handle raw data from both single-channel and two-color BeadArray platforms.
 
-<<BLData>>=
-slotNames(data)
-@
+%%<<BLData>>=
+%%slotNames(data)
+%%@
 
-\noindent The command above gives us an overview of the structure of the \Rclass{beadLevelData} class, which is composed of several slots.  The  \texttt{experimentData}, \texttt{sectionData} and \texttt{beadData} slots can be viewed as a hierarchy, with each containing data at a different level.
-Each can be accessed using the \Rfunction{@} operator, although we will see an easier way of accessing the data shortly.\\
+%%\noindent The command above gives us an overview of the structure of the \Rclass{beadLevelData} class, which is composed of several slots.  The  \texttt{experimentData}, \texttt{sectionData} and \texttt{beadData} slots can be viewed as a hierarchy, with each containing data at a different level.
+%%Each can be accessed using the \Rfunction{@} operator, although we will see an easier way of accessing the data shortly.\\
 
 \noindent The \Robject{experimentData} slot holds information that is consistent across the entire dataset.  Quantities with one value per array-section are stored in the \Robject{sectionData} slot.  For instance, any metrics information read by \Rfunction{readIllumina}, along with section names and the total number of beads, will be stored there. This is also a convenient place to store any QC information derived during the preprocessing of the data.  The data extracted from the individual text files are stored in the \Robject{beadData} slot.
 
@@ -200,67 +200,60 @@ Each can be accessed using the \Rfunction{@} operator, although we will see an e
 
 
 \begin{exc}
-Output the data stored in the \Robject{sectionData} slot, and determine the section names and number of bead intensities available from each section.  Access the intensities, x-coordinates and probe IDs for the first 5 beads on the first array section.
+Output the data stored in the \Robject{sectionData} slot, and determine the section names and number of bead intensities available from each section.
 \end{exc}
 
 <<BLData2>>=
 data@sectionData
 sectionNames(data)
 numBeads(data)
-
-
 head(data[[1]])
-
-
-getBeadData(data, array=1, what = "Grn")[1:5]
-getBeadData(data, array=1, what = "GrnX")[1:5]
-getBeadData(data, array=1, what = "ProbeID")[1:5]
 @
 
-\noindent Using the \Rfunction{@} operator to access the data in particular slots is not particularly convenient or intuitive.  The functions \Rfunction{sectionNames}, \Rfunction{numBeads} and \Rfunction{getBeadData}
-provide more convenient interfaces to the \Rclass{beadLevelData} object to retrieve specific
-information.
+%%\noindent Using the \Rfunction{@} operator to access the data in particular slots is not particularly convenient or %%intuitive.  The functions \Rfunction{sectionNames}, \Rfunction{numBeads} and \Rfunction{getBeadData}
+%%provide more convenient interfaces to the \Rclass{beadLevelData} object to retrieve specific
+%%information.
 
-\noindent The first line above uses the \Rfunction{@} operator to access all the data in the \Robject{sectionData} slot, which can be quite large and unwieldy.  The commands below it (lines 2-3) are accessor functions for retrieving a specific subset of data from the same slot.\\
+%%\noindent The first line above uses the \Rfunction{@} operator to access all the data in the \Robject{sectionData} slot, which can be quite large and unwieldy.  The commands below it (lines 2-3) are accessor functions for retrieving a specific subset of data from the same slot.\\
 
-\noindent Line 4 shows that if a \Rclass{beadLevelData} object is accessed in the same fashion as a list, a data frame containing the bead-level data for the specified array is returned.  To access a specific entry in this data frame, we can use a further subset, or the data can be accessed using the \Rfunction{getBeadData} function.  In addition to the \Rclass{beadLevelData} object, you need to specify the section (\texttt{array=...}) of interest and the column heading you want.
-
-
-\subsubsection*{Extracting transformed data}
-
-In this example, the data stored in the \Rclass{beadLevelData} object by \Rfunction{readIllumina} are extracted directly from the Illumina text files. The values in the \texttt{Grn} column are intensity values inferred from a known location in the scanned image and there are a number of steps involved before these can be translated into quantities that relate to the expression levels.  The scanner generally produces values in the range $0$ to $2^{16} - 1$, although the image  manipulation and background subtraction steps can lead to values outside this range. This is not a convenient scale for visualization and analysis and it is common to convert intensities onto the approximate range $0$ to $16$ using a $\log_2$ transformation (possibly after an additional step to adjust non-positive intensities).\\
+%\noindent Line 4 shows that if a \Rclass{beadLevelData} object is accessed in the same fashion as a list, a data frame containing the bead-level data for the specified array is returned.  To access a specific entry in this data frame, we can use a further subset, or the data can be accessed using the \Rfunction{getBeadData} function.  In addition to the \Rclass{beadLevelData} object, you need to specify the section (\texttt{array=...}) of interest and the column heading you want.
 
 
-Although this is simple to do in isolation using \texttt{R}'s built in functions, it becomes more complicated within a function, leading to a large number of arguments being required in order to specify whether the function should process the green or red channel, use foreground or background intensities, convert to the $\log_2$ scale etc.  Even in this situation the user is restricted to the options that are provided by the arguments.\\
+%\subsubsection*{Extracting transformed data}
+
+%In this example, the data stored in the \Rclass{beadLevelData} object by \Rfunction{readIllumina} are extracted directly from the Illumina text files. The values in the \texttt{Grn} column are intensity values inferred from a known location in the scanned image and there are a number of steps involved before these can be translated into quantities that relate to the expression levels.  The scanner generally produces values in the range $0$ to $2^{16} - 1$, although the image  manipulation and background subtraction steps can lead to values outside this range. This is not a convenient scale for visualization and analysis and it is common to convert intensities onto the approximate range $0$ to $16$ using a $\log_2$ transformation (possibly after an additional step to adjust non-positive intensities).\\
 
 
-A more flexible way to obtain transformed per-bead data from a \Rclass{beadLevelData} object is to define a transformation function that takes as arguments the \Rclass{beadLevelData} object and an array index.  The function then manipulates the data in the desired manner and returns a vector the same length as the number of beads on the array.  Many of the plotting and quality assessment functions within \Rpackage{beadarray} take such a function as one of their arguments.  By using such a system, \Rpackage{beadarray} provides a great deal of flexibility over exactly how the data is analysed.  
+%Although this is simple to do in isolation using \texttt{R}'s built in functions, it becomes more complicated within a function, leading to a large number of arguments being required in order to specify whether the function should process the green or red channel, use foreground or background intensities, convert to the $\log_2$ scale etc.  Even in this situation the user is restricted to the options that are provided by the arguments.\\
 
 
-\begin{exc}
-Extract the green intensities on the $\log_2$ scale for the first 10 probes from the first array section.
-\end{exc}
+%A more flexible way to obtain transformed per-bead data from a \Rclass{beadLevelData} object is to define a transformation function that takes as arguments the \Rclass{beadLevelData} object and an array index.  The function then manipulates the data in the desired manner and returns a vector the same length as the number of beads on the array.  Many of the plotting and quality assessment functions within \Rpackage{beadarray} take such a function as one of their arguments.  By using such a system, \Rpackage{beadarray} provides a great deal of flexibility over exactly how the data is analysed.  
 
 
-<<transformFunctions>>=
-log2(data[[1]][1:10,"Grn"])
-log2(getBeadData(data, array = 1, what = "Grn")[1:10])
-logGreenChannelTransform(data, array = 1)[1:10]
-@
+%\begin{exc}
+%Extract the green intensities on the $\log_2$ scale for the first 10 probes from the first array section.
+%\end{exc}
 
 
-The above example shows three different ways of obtaining the log green channel intensity data.  Lines 1 and 2 use {\tt R}'s \Rfunction{log2} function on data extracted using the methods we've already seen.  The third entry uses one of \Rpackage{beadarray}'s built in transformation functions.  To view an example of how a transformation function is defined you can enter the name of one of \Rpackage{beadarray}'s pre-defined functions without any parentheses or arguments.
+%<<transformFunctions>>=
+%log2(data[[1]][1:10,"Grn"])
+%log2(getBeadData(data, array = 1, what = "Grn")[1:10])
+%logGreenChannelTransform(data, array = 1)[1:10]
+%@
 
 
-<<transformFunctions2, results=verbatim>>=
-logGreenChannelTransform
-@
+%The above example shows three different ways of obtaining the log green channel intensity data.  Lines 1 and 2 use {\tt R}'s \Rfunction{log2} function on data extracted using the methods we've already seen.  The third entry uses one of \Rpackage{beadarray}'s built in transformation functions.  To view an example of how a transformation function is defined you can enter the name of one of \Rpackage{beadarray}'s pre-defined functions without any parentheses or arguments.
+
+
+%<<transformFunctions2, results=verbatim>>=
+%logGreenChannelTransform
+%@
 
 
 
-\begin{noteright}
-In addition to the \Rfunction{logGreenChannelTransform} function shown above, \Rpackage{beadarray} provides predefined functions for extracting the green intensities on the unlogged scale \newline(\Rfunction{greenChannelTransform}), analogous functions for two-channel data \newline(\Rfunction{logRedChannelTransform}, \Rfunction{redChannelTransform}), and functions for computing the log-ratio between channels (\Rfunction{logRatioTransform}).
-\end{noteright}
+%\begin{noteright}
+%In addition to the \Rfunction{logGreenChannelTransform} function shown above, \Rpackage{beadarray} provides predefined functions for extracting the green intensities on the unlogged scale \newline(\Rfunction{greenChannelTransform}), analogous functions for two-channel data \newline(\Rfunction{logRedChannelTransform}, \Rfunction{redChannelTransform}), and functions for computing the log-ratio between channels (\Rfunction{logRatioTransform}).
+%\end{noteright}
 
 
 \begin{noteright}
@@ -291,26 +284,26 @@ The \Rfunction{boxplot} function is a standard function in R that we has been ex
 
 Illumina have designed a number of control probes for each BeadArray platform. Two particular controls on expression arrays are housekeeping and biotin controls, which are expected to be highly expressed in any sample. With the \Rfunction{poscontPlot} function, we can plot the intensities of any ArrayAddressIDs that are annotated as belonging to the Housekeeping or Biotin control groups.
 
-\begin{exc}
-Generate plots of the housekeeping and biotin controls for the 6th, 7th, 8th and 12th arrays from this dataset.
-\end{exc}
+%\begin{exc}
+%Generate plots of the housekeeping and biotin controls for the 6th, 7th, 8th and 12th arrays from this dataset.
+%\end{exc}
 
 
-<<controlEx>>=
+%<<controlEx>>=
 
-par(mfrow=c(2,2))
+%par(mfrow=c(2,2))
 
 
-for(i in c(6,7,8,12)) {
-poscontPlot(data ,array = i, main=paste(sectionNames(data)[i], "Positive Controls"), ylim = c(4,15) )
-}
-@
+%for(i in c(6,7,8,12)) {
+%poscontPlot(data ,array = i, main=paste(sectionNames(data)[i], "Positive Controls"), ylim = c(4,15) )
+%%}
+%@
 
 Provided the annotation of the \Rclass{beadLevelData} object has been correctly set, the \Rfunction{poscontPlot} function should be able to identify the revelant probes and intensities. This code generates positive controls plots for four arrays in the dataset; one good quality array and three that we have noted problems with. A different view of the control probes is now provided by the \Rfunction{combinedControlPlot} function in \Rpackage{beadarray}, which allows better comparison of control types.
 
 
 \begin{exc}
-Make combined control plots for the same arrays as above
+Make combined control plots for the 6th, 7th, 8th and 12th arrays from this dataset.
 \end{exc}
 
 <<combinedPlot>>=
@@ -342,28 +335,28 @@ Produce imageplots for the same set of arrays and look for any evidence of spati
 @
 
 
-\subsubsection*{Plotting the location of outliers}
+%\subsubsection*{Plotting the location of outliers}
 
 
-Recall that the BeadArray technology includes many replicates (typically $\sim$ 20
-of each probe type in each sample on an HT-12 array).
-BeadStudio/GenomeStudio removes outliers greater than 3 median absolute deviations (MADs)
-from the median prior to calculating summary values.
+%Recall that the BeadArray technology includes many replicates (typically $\sim$ 20
+%of each probe type in each sample on an HT-12 array).
+%BeadStudio/GenomeStudio removes outliers greater than 3 median absolute deviations (MADs)
+%from the median prior to calculating summary values.
 
 
-\begin{exc}
-Plot the location of outliers on the arrays with the most obvious spatial artefacts and plot their location.
-\end{exc}
+%\begin{exc}
+%%Plot the location of outliers on the arrays with the most obvious spatial artefacts and plot their location.
+%\end{exc}
 
 
-<<outliers>>=
-par(mfrow=c(2,1))
-for(i in c(8,12)){
-   outlierplot(data, array=i, main=paste(sectionNames(data)[i], "outliers"))
-}
-@
+%<<outliers>>=
+%par(mfrow=c(2,1))
+%for(i in c(8,12)){
+%   outlierplot(data, array=i, main=paste(sectionNames(data)[i], "outliers"%))
+%}
+%@
 
-By default, the \Rfunction{outlierplot} function uses Illumina's `three MADs from the median' rule, but applied to log-transformed data. It then plots the identified outliers by their location on the surface of the array section. Of course, the user can specify alternative rules and transformations and the function is additionally able to accept arguments to \Rfunction{plot} such as \Rfunarg{main}.
+%By default, the \Rfunction{outlierplot} function uses Illumina's `three MADs from the median' rule, but applied to log-transformed data. It then plots the identified outliers by their location on the surface of the array section. Of course, the user can specify alternative rules and transformations and the function is additionally able to accept arguments to \Rfunction{plot} such as \Rfunarg{main}.
 
 
 \subsubsection*{Excluding beads affected by spatial artefacts} 
@@ -421,46 +414,46 @@ You should see that after having run BASH and \Rfunction{setArrayWeights}, a \te
 
 
 
-\subsubsection*{Producing control tables}
+%\subsubsection*{Producing control tables}
 
-With knowledge of what ArrayAddressIDs match different control types, we can easily provide summaries of these control types on each array. In \Rfunction{quickSummary} the mean and standard deviation of all control types is calculated for a specified array, using intensities of all beads that correspond to the different control types. Note that these summaries may not correspond to similar quantities reported in Illumina's BeadStudio/GenomeStudio software, as the summaries are produced after removing outliers. The \Rfunction{makeQCTable} function extends this functionality to produce a table of summaries for all sections in the \Rclass{beadLevelData} object. These data can be stored in the \Robject{sectionData} slot for future reference. It is also informative to compare the expression level of various control types to the background level of the array.  This is done by the \Rfunction{controlProbeDetection} function that returns the percentage of each control type that are significantly expressed above background level.  For positive controls we would prefer this to be near 100\% on a good quality array.
+%With knowledge of what ArrayAddressIDs match different control types, we can easily provide summaries of these control types on each array. In \Rfunction{quickSummary} the mean and standard deviation of all control types is calculated for a specified array, using intensities of all beads that correspond to the different control types. Note that these summaries may not correspond to similar quantities reported in Illumina's BeadStudio/GenomeStudio software, as the summaries are produced after removing outliers. The \Rfunction{makeQCTable} function extends this functionality to produce a table of summaries for all sections in the \Rclass{beadLevelData} object. These data can be stored in the \Robject{sectionData} slot for future reference. It is also informative to compare the expression level of various control types to the background level of the array.  This is done by the \Rfunction{controlProbeDetection} function that returns the percentage of each control type that are significantly expressed above background level.  For positive controls we would prefer this to be near 100\% on a good quality array.
 
-\begin{exc}
-Summarize the control intensities for the first array, then tabulate the mean and standard deviation of all control probes on every array.
-\end{exc}
-
-
-<<qcTables>>=
-quickSummary(data, array=1)
+%\begin{exc}
+%%Summarize the control intensities for the first array, then tabulate the mean and standard deviation of all control probes on every array.
+%\end{exc}
 
 
-qcReport <- makeQCTable(data)
+%%<<qcTables>>=
+%quickSummary(data, array=1)
 
 
-head(qcReport)[,1:5]
-@
-
-The above code generates a quality control summary for a single array (Line 1), then for all arrays in the \Rclass{beadLevelData} object using the \Rfunction{makeQCTable} function. 
+%qcReport <- makeQCTable(data)
 
 
-\subsubsection*{Saving control tables to a bead-level object}
-The \Rfunction{insertSectionData} function allows the user to modify the \Robject{sectionData} slot of a \newline\Robject{beadLevelData} object. We can use this functionality to store any quality control (QC) values that we have computed.
+%%head(qcReport)[,1:5]
+%@
+
+%The above code generates a quality control summary for a single array (Line 1), then for all arrays in the \Rclass{beadLevelData} object using the \Rfunction{makeQCTable} function. 
 
 
-\begin{exc}
-Store the computed QC values into the bead-level data object.
-\end{exc}
+%\subsubsection*{Saving control tables to a bead-level object}
+%The \Rfunction{insertSectionData} function allows the user to modify the \Robject{sectionData} slot of a \newline\Robject{beadLevelData} object. We can use this functionality to store any quality control (QC) values that we have computed.
 
-<<storeQCTables>>=
-data <- insertSectionData(data, what="BeadLevelQC", data=qcReport)
-names(data@sectionData)
-@
+%
+%\begin{exc}
+%Store the computed QC values into the bead-level data object.
+%\end{exc}
 
-The \Rfunction{insertSectionData} function requires a data frame with the same number of rows as the number of sections in the \Rclass{beadLevelData} object. The \Rfunarg{what} parameter is used to assign a name to the data in the \Robject{sectionData} slot.
+%<<storeQCTables>>=
+%data <- insertSectionData(data, what="BeadLevelQC", data=qcReport)
+%%names(data@sectionData)
+%@
 
-\begin{noteright}
-You could also save the QC table to disk using the \Rfunction{write.csv} function (or similar).
-\end{noteright}
+%The \Rfunction{insertSectionData} function requires a data frame with the same number of rows as the number of sections in the \Rclass{beadLevelData} object. The \Rfunarg{what} parameter is used to assign a name to the data in the \Robject{sectionData} slot.
+
+%\begin{noteright}
+%You could also save the QC table to disk using the \Rfunction{write.csv} function (or similar).
+%\end{noteright}
 
 
 
