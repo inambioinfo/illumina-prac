@@ -262,21 +262,21 @@ head(data[[1]])
 
 \subsection*{Quality assessment for raw and bead-level data}
 
-\subsubsection*{Boxplots of intensity values}
+%\subsubsection*{Boxplots of intensity values}
 
-Boxplots are routinely used to assess the dynamic range of each sample and look for unusual signal distributions.
+%Boxplots are routinely used to assess the dynamic range of each sample and look for unusual signal distributions.
 
-\begin{exc}
-Create boxplots of the green channel intensities for all arrays. Do you notice any arrays with unusual distributions?
-\end{exc}
-
-
-<<Boxplots>>=
-boxplot(data, transFun = logGreenChannelTransform, col = "green", ylab=expression(log[2](intensity)), las = 2, outline = FALSE, main = "HT-12 MAQC data")
-@
+%\begin{exc}
+%Create boxplots of the green channel intensities for all arrays. Do you notice any arrays with unusual distributions?
+%\end{exc}
 
 
-The \Rfunction{boxplot} function is a standard function in R that we has been extended to work for the \Rclass{beadLevelData} class.  Consequently, the standard parameters to \Rfunction{boxplot}, such as changing the title of the plot, scale and axis labels are possible, some of which are shown in the final five arguments above.  The help page for the \Rfunction{par} function provides information on these and other arguments that can be supplied to \Rfunction{boxplot}. The only \Rpackage{beadarray} specific argument is the second, \Rfunarg{transFun}, which takes a transformation function of the format shown previously.  In this case we have selected to use the $\log_2$ of the green channel, which is also the default.\\
+%<<Boxplots>>=
+%boxplot(data, transFun = logGreenChannelTransform, col = "green", ylab=expression(log[2](intensity)), las = 2, outline = FALSE, main = "HT-12 MAQC data")
+%@
+
+
+%The \Rfunction{boxplot} function is a standard function in R that we has been extended to work for the \Rclass{beadLevelData} class.  Consequently, the standard parameters to \Rfunction{boxplot}, such as changing the title of the plot, scale and axis labels are possible, some of which are shown in the final five arguments above.  The help page for the \Rfunction{par} function provides information on these and other arguments that can be supplied to \Rfunction{boxplot}. The only \Rpackage{beadarray} specific argument is the second, \Rfunarg{transFun}, which takes a transformation function of the format shown previously.  In this case we have selected to use the $\log_2$ of the green channel, which is also the default.\\
 
 
 \subsubsection*{Plotting control probes}
@@ -398,9 +398,6 @@ sectionNames(exampleBLData)
 
 head(exampleBLData[[1]])
 
-table(getBeadData(exampleBLData, what="wts", array=1))
-table(getBeadData(exampleBLData, what="wts", array=2))
-
 par(mfrow=c(1,2))
 for(i in c(1,2)) {
   showArrayMask(exampleBLData, array = i, override = TRUE)
@@ -504,7 +501,7 @@ These can be calculated for summarized data provided that the identity of the
 negative controls on the array is known using the function \Rfunction{calculateDetection}.
 
 \begin{exc}
- Produce boxplots of the summarized data and calculate detection scores. How many probes are present in the summarized data?
+Produce boxplots of the summarized data and calculate detection scores. How many probes are present in the summarized data? What proportion of probes are detected?
 \end{exc}
 
 <<ExpressionSetIllumina>>=
@@ -525,6 +522,9 @@ det <- calculateDetection(datasumm)
 head(det)
 
 Detection(datasumm) <- det
+
+PropDet <- apply(det, 2, function(x) sum(x <0.05)) / nrow(det)
+PropDet
 @
 
 \begin{noteright}
@@ -561,8 +561,6 @@ Create a new summary object for just the UHRR arrays.
 \end{exc}
 
 <<subsetting2>>=
-
-
 uhrrData <- datasumm[,1:6]
 uhrrData
 pData(uhrrData)
